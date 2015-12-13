@@ -4,17 +4,28 @@ import argparse
 from string import ascii_lowercase
 from itertools import ifilter, imap
 
+
+class NotAWordError(Exception): pass
+class LengthError(Exception): pass
+
 class WordPathFinder:
     """Class for finding word paths between two equally long words by exchanging
         one character at a time"""
+
     def __init__(self, dict_filename, length):
         with open(dict_filename) as dict_file:
             dict_stripped = imap(lambda x: x.strip().lower(), dict_file)
             dict_filtered = ifilter(lambda x: len(x)==length, dict_stripped)
             self.__words = dict((x, None) for x in dict_filtered)
         self.__is_clear = True
+        self.__length = length
 
     def find(self, start, end):
+        for w in (start, end):
+            if len(w) != self.__length:
+                raise LengthError("'{}' has wrong length".format(w))
+            if w not in self.__words:
+                raise NotAWordError("'{}' is not a word".format(w))
         self.__clear()
         if not self.__flood_scan(end, start):
             return None
@@ -25,10 +36,7 @@ class WordPathFinder:
             start = self.__words[start]
         return path
 
-    def has_word(self, word):
-        return word in self.__words
-
-# private methods
+    ### private methods ###
     def __flood_scan(self, seed, destination):
         """Flood fill that stores the parent-nodes in 'words' dict"""
         self.__is_clear = False
@@ -63,6 +71,7 @@ class WordPathFinder:
                 yield word[:i] + c + word[i+1:]
 
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='''Calculate the word path from one word to another by
@@ -78,21 +87,16 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if len(args.start) != len(args.end):
-        print "Words are not of equal length!"
-        exit(1)
-
     wpf = WordPathFinder(args.dict, len(args.start))
 
-    for word in (args.start, args.end):
-        if not wpf.has_word(word):
-            print "{} is not a word.".format(word)
-            exit(1)
+    try:
+        wordpath = wpf.find(args.start, args.end)
+    except (NotAWordError, LengthError) as e:
+        print "Error: " + str(e)
+        exit(1)
 
-    wordpath = wpf.find(args.start, args.end)
     if wordpath is not None:
-        for word in wordpath:
-            print word
+        print '\n'.join(wordpath)
     else:
         print "No path found."
 

@@ -4,46 +4,64 @@ import argparse
 from string import ascii_lowercase
 from itertools import ifilter, imap
 
-def mutator(word):
-    """Generator for all valid mutations of a word"""
-    for i in range(len(word)):
-        for c in ascii_lowercase:
-            yield word[:i] + c + word[i+1:]
+class WordPathFinder:
+    """Class for finding word paths between two equally long words by exchanging
+        one character at a time"""
+    def __init__(self, dict_filename, length):
+        with open(dict_filename) as dict_file:
+            dict_stripped = imap(lambda x: x.strip().lower(), dict_file)
+            dict_filtered = ifilter(lambda x: len(x)==length, dict_stripped)
+            self.__words = dict((x, None) for x in dict_filtered)
+        self.__is_clear = True
 
-def flood_scan(seed, destination, words):
-    """Flood fill that stores the parent-nodes in 'words' dict"""
-    border = [seed]
-    while border:
-        new_border = []
-        for word in border:
-            new_neighbors = ifilter(lambda x: x in words and words[x] is None,
-                                mutator(word))
-            for neighbor in new_neighbors:
-                #print neighbor
-                words[neighbor] = word
-                if neighbor == destination:
-                    return True
-                new_border.append(neighbor)
-        border = new_border
-        #print "border: " + str(border)
-    return False
+    def find(self, start, end):
+        self.__clear()
+        if not self.__flood_scan(end, start):
+            return None
+        self.__words[end] = None
+        path = []
+        while start is not None:
+            path.append(start)
+            start = self.__words[start]
+        return path
 
-def find_path(start, end, words):
-    if not flood_scan(end, start, words):
-        return
-    words[end] = None
-    path = []
-    while start is not None:
-        path.append(start)
-        start = words[start]
-    return path
+    def has_word(self, word):
+        return word in self.__words
 
-def load_words(dict_filename, length):
-    with open(dict_filename) as dict_file:
-        dict_stripped = imap(lambda x: x.strip(), dict_file)
-        dict_filtered = ifilter(lambda x: len(x)==length, dict_stripped)
-        words = dict((x, None) for x in dict_filtered)
-        return words
+# private methods
+    def __flood_scan(self, seed, destination):
+        """Flood fill that stores the parent-nodes in 'words' dict"""
+        self.__is_clear = False
+        border = [seed]
+        while border:
+            new_border = []
+            for word in border:
+                new_neighbors = ifilter(lambda x: x in self.__words and
+                    self.__words[x] is None, WordPathFinder.__mutator(word))
+                for neighbor in new_neighbors:
+                    #print neighbor
+                    self.__words[neighbor] = word
+                    if neighbor == destination:
+                        return True
+                    new_border.append(neighbor)
+            border = new_border
+            #print "border: " + str(border)
+        return False
+
+    def __clear(self):
+        if self.__is_clear:
+            return
+        for w in self.__words:
+            self.__words[w] = None
+        self.__is_clear = True
+
+    @staticmethod
+    def __mutator(word):
+        """Generator for all valid mutations of a word"""
+        for i in range(len(word)):
+            for c in ascii_lowercase:
+                yield word[:i] + c + word[i+1:]
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -64,14 +82,14 @@ def main():
         print "Words are not of equal length!"
         exit(1)
 
-    words = load_words(args.dict, len(args.start))
+    wpf = WordPathFinder(args.dict, len(args.start))
 
     for word in (args.start, args.end):
-        if not word in words:
+        if not wpf.has_word(word):
             print "{} is not a word.".format(word)
             exit(1)
 
-    wordpath = find_path(args.start, args.end, words)
+    wordpath = wpf.find(args.start, args.end)
     if wordpath is not None:
         for word in wordpath:
             print word
